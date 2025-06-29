@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { createShortLink, getAllLinks } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import type { ShortenedLink } from '@/lib/types';
-import { adminAuth } from '@/lib/firebase/admin';
+import { adminAuth, adminDb } from '@/lib/firebase/admin';
 
 const urlSchema = z.string().url({ message: 'Please enter a valid URL.' });
 
@@ -18,6 +18,14 @@ export async function shortenUrlAction(
   longUrl: string,
   idToken: string | undefined
 ): Promise<ShortenUrlActionState> {
+
+  if (typeof adminDb?.collection !== 'function') {
+    return {
+        message: 'Firebase Admin SDK is not configured on the server. Please check your environment variables.',
+        shortLink: null,
+        error: true,
+    };
+  }
 
   if (!idToken) {
     return {
@@ -59,6 +67,7 @@ export async function shortenUrlAction(
       error: false,
     };
   } catch (error) {
+    console.error("Error creating short link:", error);
     return {
       message: 'An error occurred on the server. Please try again.',
       shortLink: null,
@@ -69,6 +78,11 @@ export async function shortenUrlAction(
 
 
 export async function getUserLinksAction(idToken: string | undefined): Promise<ShortenedLink[]> {
+    if (typeof adminDb?.collection !== 'function') {
+      console.error('Firebase Admin SDK is not configured on the server. Please check your environment variables.');
+      return [];
+    }
+
     if (!idToken) {
         return [];
     }
