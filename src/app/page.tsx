@@ -7,14 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Link as LinkIcon, Check, Download, LogIn } from 'lucide-react';
+import { Copy, Link as LinkIcon, Check, Download } from 'lucide-react';
 import QRCode from 'qrcode';
-import { useAuth } from '@/hooks/use-auth';
-import { Skeleton } from '@/components/ui/skeleton';
-import Link from 'next/link';
 
 export default function Home() {
-  const { user, loading } = useAuth();
   const { toast } = useToast();
 
   const [longUrl, setLongUrl] = useState('');
@@ -54,14 +50,6 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
-      toast({
-        title: 'Not Logged In',
-        description: 'Please log in to shorten URLs.',
-        variant: 'destructive'
-      });
-      return;
-    }
     
     setIsLoading(true);
     setResult(null);
@@ -69,8 +57,7 @@ export default function Home() {
     setQrCodeDataUrl(null);
 
     try {
-      const idToken = await user.getIdToken();
-      const actionResult = await shortenUrlAction(longUrl, idToken);
+      const actionResult = await shortenUrlAction(longUrl);
       setResult(actionResult);
     } catch (error) {
       console.error(error);
@@ -92,28 +79,15 @@ export default function Home() {
     }
   };
 
-  const renderContent = () => {
-    if (loading) {
-      return <Skeleton className="h-48 w-full max-w-xl" />;
-    }
+  return (
+    <div className="flex flex-col items-center justify-center gap-8 pt-8 md:pt-16">
+      <div className="text-center max-w-2xl">
+        <h1 className="text-4xl md:text-6xl font-bold font-headline text-primary">Shorten Your Links</h1>
+        <p className="mt-4 text-lg text-foreground/80">
+          Create short, memorable links in seconds. Track every click and measure your success. LinkWise is the wise choice for link management.
+        </p>
+      </div>
 
-    if (!user) {
-      return (
-        <Card className="w-full max-w-xl shadow-lg text-center">
-          <CardHeader>
-            <CardTitle className="font-headline">Welcome to LinkWise</CardTitle>
-            <CardDescription>Log in to start shortening and tracking your links.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild size="lg">
-              <Link href="/login"><LogIn className="mr-2" /> Login</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    return (
       <Card className="w-full max-w-xl shadow-lg">
         <CardHeader>
           <CardTitle className="font-headline">Let's make it short!</CardTitle>
@@ -141,19 +115,6 @@ export default function Home() {
           </form>
         </CardContent>
       </Card>
-    );
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center gap-8 pt-8 md:pt-16">
-      <div className="text-center max-w-2xl">
-        <h1 className="text-4xl md:text-6xl font-bold font-headline text-primary">Shorten Your Links</h1>
-        <p className="mt-4 text-lg text-foreground/80">
-          Create short, memorable links in seconds. Track every click and measure your success. LinkWise is the wise choice for link management.
-        </p>
-      </div>
-
-      {renderContent()}
 
       {shortenedUrl && (
         <Card className="w-full max-w-xl shadow-lg animate-in fade-in-50 slide-in-from-bottom-5 duration-500">
@@ -186,10 +147,7 @@ export default function Home() {
               </div>
             )}
             <p className="text-sm text-muted-foreground mt-4">
-              You can now copy and share your new short link. Analytics are available on the{' '}
-              <a href="/analytics" className="underline text-accent hover:text-accent/80">
-                Analytics page
-              </a>.
+              You can now copy and share your new short link. Note: This is a demo and links are not saved or redirectable.
             </p>
           </CardContent>
         </Card>
