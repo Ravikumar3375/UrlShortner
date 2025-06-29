@@ -1,7 +1,1 @@
-import {genkit} from 'genkit';
-import {googleAI} from '@genkit-ai/googleai';
-
-export const ai = genkit({
-  plugins: [googleAI()],
-  model: 'googleai/gemini-2.0-flash',
-});
+// This directory and its files are not used in the current version of the application.
