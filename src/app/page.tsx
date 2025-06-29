@@ -1,66 +1,88 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
-import { shortenUrlAction } from '@/app/actions';
+import { shortenUrlAction, ShortenUrlActionState } from '@/app/actions';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Link as LinkIcon, Check, Download } from 'lucide-react';
+import { Copy, Link as LinkIcon, Check, Download, LogIn } from 'lucide-react';
 import QRCode from 'qrcode';
-
-const initialState = {
-  message: '',
-  shortLink: null,
-  error: false,
-};
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? 'Shortening...' : 'Shorten URL'}
-    </Button>
-  );
-}
+import { useAuth } from '@/hooks/use-auth';
+import { Skeleton } from '@/components/ui/skeleton';
+import Link from 'next/link';
 
 export default function Home() {
-  const [state, formAction] = useFormState(shortenUrlAction, initialState);
+  const { user, loading } = useAuth();
   const { toast } = useToast();
-  const formRef = useRef<HTMLFormElement>(null);
+
+  const [longUrl, setLongUrl] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<ShortenUrlActionState | null>(null);
+
   const [shortenedUrl, setShortenedUrl] = useState<string | null>(null);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
+  
   useEffect(() => {
-    if (state.message) {
-      if (state.error) {
-        toast({
-          title: 'Error',
-          description: state.message,
-          variant: 'destructive',
-        });
-        setShortenedUrl(null);
-        setQrCodeDataUrl(null);
-      } else if (state.shortLink) {
-        const fullShortUrl = `${window.location.origin}/${state.shortLink.shortCode}`;
-        setShortenedUrl(fullShortUrl);
-        
-        QRCode.toDataURL(fullShortUrl, { width: 256, margin: 1 }, (err, url) => {
-          if (!err) {
-            setQrCodeDataUrl(url);
-          } else {
-            console.error('QR Code generation failed:', err);
+    if (result) {
+        if (result.error) {
+            toast({
+                title: 'Error',
+                description: result.message,
+                variant: 'destructive',
+            });
+            setShortenedUrl(null);
             setQrCodeDataUrl(null);
-          }
-        });
-
-        formRef.current?.reset();
-      }
+        } else if (result.shortLink) {
+            const fullShortUrl = `${window.location.origin}/${result.shortLink.shortCode}`;
+            setShortenedUrl(fullShortUrl);
+            
+            QRCode.toDataURL(fullShortUrl, { width: 256, margin: 1 }, (err, url) => {
+                if (!err) {
+                    setQrCodeDataUrl(url);
+                } else {
+                    console.error('QR Code generation failed:', err);
+                    setQrCodeDataUrl(null);
+                }
+            });
+            setLongUrl('');
+        }
     }
-  }, [state, toast]);
+  }, [result, toast]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      toast({
+        title: 'Not Logged In',
+        description: 'Please log in to shorten URLs.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    setIsLoading(true);
+    setResult(null);
+    setShortenedUrl(null);
+    setQrCodeDataUrl(null);
+
+    try {
+      const idToken = await user.getIdToken();
+      const actionResult = await shortenUrlAction(longUrl, idToken);
+      setResult(actionResult);
+    } catch (error) {
+      console.error(error);
+      toast({
+          title: 'Error',
+          description: 'An unexpected error occurred.',
+          variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const handleCopy = () => {
     if (shortenedUrl) {
@@ -68,6 +90,58 @@ export default function Home() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const renderContent = () => {
+    if (loading) {
+      return <Skeleton className="h-48 w-full max-w-xl" />;
+    }
+
+    if (!user) {
+      return (
+        <Card className="w-full max-w-xl shadow-lg text-center">
+          <CardHeader>
+            <CardTitle className="font-headline">Welcome to LinkWise</CardTitle>
+            <CardDescription>Log in to start shortening and tracking your links.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild size="lg">
+              <Link href="/login"><LogIn className="mr-2" /> Login</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <Card className="w-full max-w-xl shadow-lg">
+        <CardHeader>
+          <CardTitle className="font-headline">Let's make it short!</CardTitle>
+          <CardDescription>Paste your long URL below to get started.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="longUrl">URL to Shorten</Label>
+              <Input
+                id="longUrl"
+                name="longUrl"
+                type="url"
+                placeholder="https://example.com/very-long-url-to-shorten"
+                required
+                className="h-12 text-base"
+                value={longUrl}
+                onChange={(e) => setLongUrl(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Shortening...' : 'Shorten URL'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
@@ -79,28 +153,7 @@ export default function Home() {
         </p>
       </div>
 
-      <Card className="w-full max-w-xl shadow-lg">
-        <CardHeader>
-          <CardTitle className="font-headline">Let's make it short!</CardTitle>
-          <CardDescription>Paste your long URL below to get started.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form ref={formRef} action={formAction} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="longUrl">URL to Shorten</Label>
-              <Input
-                id="longUrl"
-                name="longUrl"
-                type="url"
-                placeholder="https://example.com/very-long-url-to-shorten"
-                required
-                className="h-12 text-base"
-              />
-            </div>
-            <SubmitButton />
-          </form>
-        </CardContent>
-      </Card>
+      {renderContent()}
 
       {shortenedUrl && (
         <Card className="w-full max-w-xl shadow-lg animate-in fade-in-50 slide-in-from-bottom-5 duration-500">
@@ -124,7 +177,7 @@ export default function Home() {
                 <img src={qrCodeDataUrl} alt="QR Code" className="rounded-lg border p-1 bg-white" />
                 <a
                   href={qrCodeDataUrl}
-                  download={`${state.shortLink?.shortCode}-qrcode.png`}
+                  download={`${result?.shortLink?.shortCode}-qrcode.png`}
                   className={buttonVariants({ variant: 'outline' })}
                 >
                   <Download className="mr-2" />

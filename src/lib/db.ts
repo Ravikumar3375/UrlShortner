@@ -1,69 +1,53 @@
 import 'server-only';
 import type { ShortenedLink } from './types';
+import { adminDb } from './firebase/admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
-// In-memory store to simulate a database.
-// In a real application, this would be a database like PostgreSQL, MongoDB, or Firebase.
-const links: Map<string, ShortenedLink> = new Map();
-const longUrlIndex: Map<string, string> = new Map(); // longUrl -> shortCode
-
-// Pre-populate with some data for demonstration
-const initialData: ShortenedLink[] = [
-  {
-    id: '1',
-    longUrl: 'https://google.com',
-    shortCode: 'ggl',
-    clicks: 123,
-    createdAt: new Date('2023-10-26T10:00:00Z').toISOString(),
-    lastAccessed: new Date('2023-10-28T14:30:00Z').toISOString(),
-  },
-  {
-    id: '2',
-    longUrl: 'https://github.com/facebook/react',
-    shortCode: 'react',
-    clicks: 45,
-    createdAt: new Date('2023-10-27T11:00:00Z').toISOString(),
-    lastAccessed: new Date('2023-10-28T12:15:00Z').toISOString(),
-  },
-];
-
-initialData.forEach(link => {
-  links.set(link.shortCode, link);
-  longUrlIndex.set(link.longUrl, link.shortCode);
-});
+const linksCollection = adminDb.collection('links');
 
 function generateShortCode(): string {
-  // Simple short code generator. In a real app, use a more robust library
-  // like nanoid and ensure uniqueness against the database.
   return Math.random().toString(36).substring(2, 8);
 }
 
 export async function getLinkByShortCode(shortCode: string): Promise<ShortenedLink | undefined> {
-  return links.get(shortCode);
+  const doc = await linksCollection.doc(shortCode).get();
+  if (!doc.exists) {
+    return undefined;
+  }
+  return { id: doc.id, ...doc.data() } as ShortenedLink;
 }
 
-export async function getLinkByLongUrl(longUrl: string): Promise<ShortenedLink | undefined> {
-  const shortCode = longUrlIndex.get(longUrl);
-  return shortCode ? links.get(shortCode) : undefined;
+export async function getAllLinks(userId: string): Promise<ShortenedLink[]> {
+  const snapshot = await linksCollection.where('userId', '==', userId).orderBy('createdAt', 'desc').get();
+  if (snapshot.empty) {
+    return [];
+  }
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ShortenedLink));
 }
 
-export async function getAllLinks(): Promise<ShortenedLink[]> {
-  return Array.from(links.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-}
-
-export async function createShortLink(longUrl: string): Promise<ShortenedLink> {
-  const existingLink = await getLinkByLongUrl(longUrl);
-  if (existingLink) {
-    return existingLink;
+export async function createShortLink(longUrl: string, userId: string): Promise<ShortenedLink> {
+  // Check if this user has already shortened this URL
+  const existingQuery = await linksCollection.where('longUrl', '==', longUrl).where('userId', '==', userId).limit(1).get();
+  if (!existingQuery.empty) {
+      const doc = existingQuery.docs[0];
+      return { id: doc.id, ...doc.data() } as ShortenedLink;
   }
 
   let shortCode = generateShortCode();
+  let isUnique = false;
+
   // Ensure the generated code is unique
-  while (links.has(shortCode)) {
-    shortCode = generateShortCode();
+  while(!isUnique) {
+    const doc = await linksCollection.doc(shortCode).get();
+    if (!doc.exists) {
+        isUnique = true;
+    } else {
+        shortCode = generateShortCode();
+    }
   }
 
-  const newLink: ShortenedLink = {
-    id: (links.size + 1).toString(),
+  const newLink: Omit<ShortenedLink, 'id'> = {
+    userId,
     longUrl,
     shortCode,
     clicks: 0,
@@ -71,18 +55,21 @@ export async function createShortLink(longUrl: string): Promise<ShortenedLink> {
     lastAccessed: null,
   };
 
-  links.set(newLink.shortCode, newLink);
-  longUrlIndex.set(newLink.longUrl, newLink.shortCode);
+  await linksCollection.doc(shortCode).set(newLink);
 
-  return newLink;
+  return { id: shortCode, ...newLink };
 }
 
 export async function incrementClick(shortCode: string): Promise<ShortenedLink | undefined> {
-    const link = links.get(shortCode);
-    if (link) {
-        link.clicks += 1;
-        link.lastAccessed = new Date().toISOString();
-        return link;
+    const linkRef = linksCollection.doc(shortCode);
+    const doc = await linkRef.get();
+    if (doc.exists) {
+        await linkRef.update({
+            clicks: FieldValue.increment(1),
+            lastAccessed: new Date().toISOString(),
+        });
+        const updatedDoc = await linkRef.get();
+        return { id: updatedDoc.id, ...updatedDoc.data() } as ShortenedLink;
     }
     return undefined;
 }

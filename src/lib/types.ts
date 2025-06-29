@@ -1,5 +1,6 @@
 export interface ShortenedLink {
-  id: string;
+  id: string; // The short code is the ID in firestore
+  userId: string;
   longUrl: string;
   shortCode: string;
   clicks: number;

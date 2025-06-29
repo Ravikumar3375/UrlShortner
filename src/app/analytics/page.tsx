@@ -1,4 +1,11 @@
-import { getAllLinks } from '@/lib/db';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
+import type { ShortenedLink } from '@/lib/types';
+import { getUserLinksAction } from '@/app/actions';
+
 import {
   Table,
   TableBody,
@@ -13,9 +20,60 @@ import Link from 'next/link';
 import { BarChart2, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { QRCodeModal } from '@/components/QRCodeModal';
+import { Skeleton } from '@/components/ui/skeleton';
 
-export default async function AnalyticsPage() {
-  const links = await getAllLinks();
+
+export default function AnalyticsPage() {
+    const { user, loading: authLoading } = useAuth();
+    const router = useRouter();
+    const [links, setLinks] = useState<ShortenedLink[]>([]);
+    const [loadingLinks, setLoadingLinks] = useState(true);
+
+    useEffect(() => {
+        if (!authLoading && !user) {
+            router.push('/login');
+        }
+    }, [user, authLoading, router]);
+
+    useEffect(() => {
+        if (user) {
+            const fetchLinks = async () => {
+                setLoadingLinks(true);
+                try {
+                    const idToken = await user.getIdToken();
+                    const userLinks = await getUserLinksAction(idToken);
+                    setLinks(userLinks);
+                } catch (error) {
+                    console.error("Failed to fetch links", error);
+                } finally {
+                    setLoadingLinks(false);
+                }
+            };
+            fetchLinks();
+        }
+    }, [user]);
+
+    if (authLoading || !user) {
+        return (
+            <div className="space-y-8">
+                 <div>
+                    <h1 className="text-3xl font-bold font-headline text-primary">Analytics</h1>
+                    <p className="text-muted-foreground">
+                        Track the performance of all your shortened links.
+                    </p>
+                </div>
+                <Card>
+                    <CardHeader>
+                        <Skeleton className="h-8 w-1/4" />
+                        <Skeleton className="h-4 w-1/2" />
+                    </CardHeader>
+                    <CardContent>
+                        <Skeleton className="h-48 w-full" />
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
 
   return (
     <div className="space-y-8">
@@ -46,7 +104,13 @@ export default async function AnalyticsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {links.length > 0 ? (
+              {loadingLinks ? (
+                <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center">
+                        <p>Loading your links...</p>
+                    </TableCell>
+                </TableRow>
+              ) : links.length > 0 ? (
                 links.map((link) => (
                   <TableRow key={link.id}>
                     <TableCell>

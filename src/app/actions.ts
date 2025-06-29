@@ -1,20 +1,43 @@
 'use server';
 
 import { z } from 'zod';
-import { createShortLink } from '@/lib/db';
+import { createShortLink, getAllLinks } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import type { ShortenedLink } from '@/lib/types';
+import { adminAuth } from '@/lib/firebase/admin';
 
 const urlSchema = z.string().url({ message: 'Please enter a valid URL.' });
 
-interface ActionState {
+export interface ShortenUrlActionState {
   message: string;
   shortLink: ShortenedLink | null;
   error: boolean;
 }
 
-export async function shortenUrlAction(prevState: ActionState, formData: FormData): Promise<ActionState> {
-  const longUrl = formData.get('longUrl');
+export async function shortenUrlAction(
+  longUrl: string,
+  idToken: string | undefined
+): Promise<ShortenUrlActionState> {
+
+  if (!idToken) {
+    return {
+      message: 'You must be logged in to shorten links.',
+      shortLink: null,
+      error: true,
+    };
+  }
+  
+  let uid: string;
+  try {
+      const decodedToken = await adminAuth.verifyIdToken(idToken);
+      uid = decodedToken.uid;
+  } catch (error) {
+       return {
+          message: 'Authentication failed. Please log in again.',
+          shortLink: null,
+          error: true,
+        };
+  }
 
   const validatedUrl = urlSchema.safeParse(longUrl);
 
@@ -27,7 +50,7 @@ export async function shortenUrlAction(prevState: ActionState, formData: FormDat
   }
 
   try {
-    const shortLink = await createShortLink(validatedUrl.data);
+    const shortLink = await createShortLink(validatedUrl.data, uid);
     // Revalidate the analytics page to show the new link
     revalidatePath('/analytics'); 
     return {
@@ -42,4 +65,20 @@ export async function shortenUrlAction(prevState: ActionState, formData: FormDat
       error: true,
     };
   }
+}
+
+
+export async function getUserLinksAction(idToken: string | undefined): Promise<ShortenedLink[]> {
+    if (!idToken) {
+        return [];
+    }
+
+    try {
+        const decodedToken = await adminAuth.verifyIdToken(idToken);
+        const uid = decodedToken.uid;
+        return await getAllLinks(uid);
+    } catch (error) {
+        console.error("Failed to verify token or get links", error);
+        return [];
+    }
 }
