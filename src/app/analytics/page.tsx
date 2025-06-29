@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,7 +58,7 @@ export default function AnalyticsPage() {
                 <CardDescription>
                     You haven't shortened any links. Once you do, their stats will appear here.
                 </CardDescription>
-                </Header>
+                </CardHeader>
                 <CardContent>
                     <p>
                         Your link analytics are stored locally in your browser.
