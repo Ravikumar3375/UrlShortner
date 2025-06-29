@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { BarChart2, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { QRCodeModal } from '@/components/QRCodeModal';
 
 export default async function AnalyticsPage() {
   const links = await getAllLinks();
@@ -41,6 +42,7 @@ export default async function AnalyticsPage() {
                 <TableHead>Clicks</TableHead>
                 <TableHead className="hidden sm:table-cell">Created</TableHead>
                 <TableHead className="hidden sm:table-cell">Last Accessed</TableHead>
+                <TableHead><span className="sr-only">QR Code</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -74,11 +76,14 @@ export default async function AnalyticsPage() {
                     <TableCell className="hidden sm:table-cell text-muted-foreground">
                       {link.lastAccessed ? formatDistanceToNow(new Date(link.lastAccessed), { addSuffix: true }) : 'Never'}
                     </TableCell>
+                    <TableCell className="text-right">
+                        <QRCodeModal shortCode={link.shortCode} />
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center h-24">
+                  <TableCell colSpan={6} className="text-center h-24">
                     No links created yet. Start by shortening a URL on the home page!
                   </TableCell>
                 </TableRow>

@@ -2,13 +2,14 @@
 
 import { useFormState, useFormStatus } from 'react-dom';
 import { shortenUrlAction } from '@/app/actions';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Link as LinkIcon, Check } from 'lucide-react';
+import { Copy, Link as LinkIcon, Check, Download } from 'lucide-react';
+import QRCode from 'qrcode';
 
 const initialState = {
   message: '',
@@ -30,6 +31,7 @@ export default function Home() {
   const { toast } = useToast();
   const formRef = useRef<HTMLFormElement>(null);
   const [shortenedUrl, setShortenedUrl] = useState<string | null>(null);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -40,9 +42,21 @@ export default function Home() {
           description: state.message,
           variant: 'destructive',
         });
+        setShortenedUrl(null);
+        setQrCodeDataUrl(null);
       } else if (state.shortLink) {
         const fullShortUrl = `${window.location.origin}/${state.shortLink.shortCode}`;
         setShortenedUrl(fullShortUrl);
+        
+        QRCode.toDataURL(fullShortUrl, { width: 256, margin: 1 }, (err, url) => {
+          if (!err) {
+            setQrCodeDataUrl(url);
+          } else {
+            console.error('QR Code generation failed:', err);
+            setQrCodeDataUrl(null);
+          }
+        });
+
         formRef.current?.reset();
       }
     }
@@ -105,7 +119,20 @@ export default function Home() {
                 {copied ? <Check className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground mt-2">
+            {qrCodeDataUrl && (
+              <div className="mt-6 flex flex-col items-center gap-4 border-t pt-6">
+                <img src={qrCodeDataUrl} alt="QR Code" className="rounded-lg border p-1 bg-white" />
+                <a
+                  href={qrCodeDataUrl}
+                  download={`${state.shortLink?.shortCode}-qrcode.png`}
+                  className={buttonVariants({ variant: 'outline' })}
+                >
+                  <Download className="mr-2" />
+                  Download QR Code
+                </a>
+              </div>
+            )}
+            <p className="text-sm text-muted-foreground mt-4">
               You can now copy and share your new short link. Analytics are available on the{' '}
               <a href="/analytics" className="underline text-accent hover:text-accent/80">
                 Analytics page
