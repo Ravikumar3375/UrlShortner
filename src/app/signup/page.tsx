@@ -20,16 +20,6 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!auth?.app) {
-      toast({
-        title: 'Configuration Error',
-        description: 'Firebase is not configured. Please add your credentials to the .env.local file.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setIsLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
