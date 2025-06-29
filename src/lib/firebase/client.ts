@@ -1,5 +1,5 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,8 +10,18 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
+let app: FirebaseApp;
+let auth: Auth;
+
+// We need at least the API key and project ID to initialize Firebase.
+if (firebaseConfig.apiKey && firebaseConfig.apiKey !== 'your_api_key_here') {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  auth = getAuth(app);
+} else {
+  console.warn("Firebase client configuration is missing or incomplete in .env.local. Firebase features will be disabled on the client. Please create and populate a .env.local file with your Firebase project credentials.");
+  // Use dummy/mock objects to prevent the app from crashing.
+  app = {} as FirebaseApp;
+  auth = {} as Auth;
+}
 
 export { app, auth };
