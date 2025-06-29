@@ -14,7 +14,7 @@ if (process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON && process.env.FIREBASE_ADMI
       Buffer.from(
         process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON,
         'base64'
-      ).toString('ascii')
+      ).toString('utf-8')
     );
     
     adminApp = !getApps().length
