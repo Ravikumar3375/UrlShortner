@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Zap } from 'lucide-react';
+import { Zap, BarChart } from 'lucide-react';
 
 export default function Header() {
   return (
@@ -16,6 +16,9 @@ export default function Header() {
           <nav className="flex items-center gap-2 sm:gap-4">
             <Button variant="ghost" asChild>
               <Link href="/">Home</Link>
+            </Button>
+            <Button variant="ghost" asChild>
+              <Link href="/analytics">Analytics</Link>
             </Button>
           </nav>
         </div>

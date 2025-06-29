@@ -1,64 +1,121 @@
 'use client';
 
-import { shortenUrlAction, ShortenUrlActionState } from '@/app/actions';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Link as LinkIcon, Check, Download } from 'lucide-react';
+import { Copy, Link as LinkIcon, Check, Download, Trash2 } from 'lucide-react';
 import QRCode from 'qrcode';
+import type { ShortenedLink } from '@/lib/types';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { QRCodeModal } from '@/components/QRCodeModal';
+import { formatDistanceToNow } from 'date-fns';
+
+function generateShortCode(): string {
+  return Math.random().toString(36).substring(2, 8);
+}
 
 export default function Home() {
   const { toast } = useToast();
 
   const [longUrl, setLongUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<ShortenUrlActionState | null>(null);
+  
+  const [links, setLinks] = useState<ShortenedLink[]>([]);
+  const [latestLink, setLatestLink] = useState<ShortenedLink | null>(null);
 
   const [shortenedUrl, setShortenedUrl] = useState<string | null>(null);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   
   useEffect(() => {
-    if (result) {
-        if (result.error) {
-            toast({
-                title: 'Error',
-                description: result.message,
-                variant: 'destructive',
-            });
-            setShortenedUrl(null);
-            setQrCodeDataUrl(null);
-        } else if (result.shortLink) {
-            const fullShortUrl = `${window.location.origin}/${result.shortLink.shortCode}`;
-            setShortenedUrl(fullShortUrl);
-            
-            QRCode.toDataURL(fullShortUrl, { width: 256, margin: 1 }, (err, url) => {
-                if (!err) {
-                    setQrCodeDataUrl(url);
-                } else {
-                    console.error('QR Code generation failed:', err);
-                    setQrCodeDataUrl(null);
-                }
-            });
-            setLongUrl('');
-        }
+    try {
+      const savedLinks = localStorage.getItem('shortenedLinks');
+      if (savedLinks) {
+        setLinks(JSON.parse(savedLinks));
+      }
+    } catch (error) {
+      console.error("Failed to load links from local storage:", error);
+      toast({
+        title: 'Error',
+        description: 'Could not load saved links from your browser.',
+        variant: 'destructive',
+      });
     }
-  }, [result, toast]);
+  }, [toast]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('shortenedLinks', JSON.stringify(links));
+    } catch (error) {
+      console.error("Failed to save links to local storage:", error);
+    }
+  }, [links]);
+
+  const sortedLinks = useMemo(() => {
+    return [...links].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [links]);
+
+
+  useEffect(() => {
+    if (latestLink) {
+        const fullShortUrl = `${window.location.origin}/${latestLink.shortCode}`;
+        setShortenedUrl(fullShortUrl);
+        
+        QRCode.toDataURL(fullShortUrl, { width: 256, margin: 1 }, (err, url) => {
+            if (!err) {
+                setQrCodeDataUrl(url);
+            } else {
+                console.error('QR Code generation failed:', err);
+                setQrCodeDataUrl(null);
+            }
+        });
+        setLongUrl('');
+    }
+  }, [latestLink]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     setIsLoading(true);
-    setResult(null);
+    setLatestLink(null);
     setShortenedUrl(null);
     setQrCodeDataUrl(null);
 
     try {
-      const actionResult = await shortenUrlAction(longUrl);
-      setResult(actionResult);
+        new URL(longUrl);
+    } catch (_) {
+        toast({
+            title: 'Error',
+            description: 'Please enter a valid URL.',
+            variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+    }
+
+    try {
+      const shortCode = generateShortCode();
+      const newLink: ShortenedLink = {
+          id: shortCode,
+          longUrl: longUrl,
+          shortCode: shortCode,
+          clicks: 0,
+          createdAt: new Date().toISOString(),
+          lastAccessed: null,
+      };
+
+      setLinks(prevLinks => [newLink, ...prevLinks]);
+      setLatestLink(newLink);
+
     } catch (error) {
       console.error(error);
       toast({
@@ -71,12 +128,16 @@ export default function Home() {
     }
   };
   
-  const handleCopy = () => {
-    if (shortenedUrl) {
-      navigator.clipboard.writeText(shortenedUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+  const handleCopy = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    toast({ title: 'Copied!', description: 'Short link copied to clipboard.' });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDelete = (id: string) => {
+    setLinks(links.filter(link => link.id !== id));
+    toast({ title: 'Link deleted.' });
   };
 
   return (
@@ -84,7 +145,7 @@ export default function Home() {
       <div className="text-center max-w-2xl">
         <h1 className="text-4xl md:text-6xl font-bold font-headline text-primary">Shorten Your Links</h1>
         <p className="mt-4 text-lg text-foreground/80">
-          Create short, memorable links in seconds. Track every click and measure your success. LinkWise is the wise choice for link management.
+          Create short, memorable links in seconds. Your links are saved in your browser's local storage.
         </p>
       </div>
 
@@ -116,7 +177,7 @@ export default function Home() {
         </CardContent>
       </Card>
 
-      {shortenedUrl && (
+      {shortenedUrl && latestLink && (
         <Card className="w-full max-w-xl shadow-lg animate-in fade-in-50 slide-in-from-bottom-5 duration-500">
           <CardHeader>
             <CardTitle className="font-headline">Your Link is Ready!</CardTitle>
@@ -129,7 +190,7 @@ export default function Home() {
                 value={shortenedUrl} 
                 className="flex-1 bg-transparent outline-none text-primary font-mono"
               />
-              <Button variant="ghost" size="icon" onClick={handleCopy}>
+              <Button variant="ghost" size="icon" onClick={() => handleCopy(shortenedUrl)}>
                 {copied ? <Check className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
               </Button>
             </div>
@@ -138,7 +199,7 @@ export default function Home() {
                 <img src={qrCodeDataUrl} alt="QR Code" className="rounded-lg border p-1 bg-white" />
                 <a
                   href={qrCodeDataUrl}
-                  download={`${result?.shortLink?.shortCode}-qrcode.png`}
+                  download={`${latestLink.shortCode}-qrcode.png`}
                   className={buttonVariants({ variant: 'outline' })}
                 >
                   <Download className="mr-2" />
@@ -146,9 +207,56 @@ export default function Home() {
                 </a>
               </div>
             )}
-            <p className="text-sm text-muted-foreground mt-4">
-              You can now copy and share your new short link. Note: This is a demo and links are not saved or redirectable.
-            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {sortedLinks.length > 0 && (
+        <Card className="w-full max-w-4xl shadow-lg animate-in fade-in-50 duration-500">
+          <CardHeader>
+            <CardTitle className="font-headline">Your Links</CardTitle>
+            <CardDescription>
+              Here are the links you've shortened. They are stored locally in your browser.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Short Link</TableHead>
+                  <TableHead className="hidden md:table-cell">Original URL</TableHead>
+                  <TableHead className="hidden sm:table-cell">Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedLinks.map((link) => {
+                  const shortUrl = `${window.location.origin}/${link.shortCode}`;
+                  return (
+                    <TableRow key={link.id}>
+                      <TableCell>
+                        <a href={shortUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-mono">{shortUrl}</a>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell max-w-sm truncate">
+                        <a href={link.longUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:underline">{link.longUrl}</a>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-muted-foreground">
+                        {formatDistanceToNow(new Date(link.createdAt), { addSuffix: true })}
+                      </TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleCopy(shortUrl)}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <QRCodeModal shortCode={link.shortCode} />
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(link.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
