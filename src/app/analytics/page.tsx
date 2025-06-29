@@ -98,7 +98,7 @@ export default function AnalyticsPage() {
             </TableHeader>
             <TableBody>
               {sortedLinks.map((link) => {
-                const shortUrl = `${window.location.origin}/${link.shortCode}`;
+                const shortUrl = typeof window !== 'undefined' ? `${window.location.origin}/${link.shortCode}` : `/${link.shortCode}`;
                 return (
                   <TableRow key={link.id}>
                     <TableCell>
